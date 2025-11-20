@@ -1,0 +1,11 @@
+mv ~/mapper.py ~/reducer.py ~/hadoop_mapcount/
+chmod +x ~/hadoop_mapcount/mapper.py
+chmod +x ~/hadoop_mapcount/reducer.py
+hdfs dfs -rm -r /user/hadoopuser/output_wordcount
+hadoop jar $HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.3.6.jar \
+-input /user/hadoopuser/input \
+-output /user/hadoopuser/output_wordcount \
+-mapper ~/hadoop_mapcount/mapper.py \
+-reducer ~/hadoop_mapcount/reducer.py
+hdfs dfs -cat /user/hadoopuser/output_wordcount/part-00000
+

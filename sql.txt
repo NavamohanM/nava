@@ -1,0 +1,138 @@
+sudo mysql -u root -p
+
+CREATE DATABASE retail_source;
+USE retail_source;
+
+
+CREATE TABLE sales_transaction (
+    Transaction_ID INT PRIMARY KEY,
+    Date DATE,
+    Customer_ID INT,
+    Gender VARCHAR(10),
+    Age INT,
+    Product_Category VARCHAR(50),
+    Quantity INT,
+    Price_per_Unit DECIMAL(10,2),
+    Total_Amount DECIMAL(10,2)
+);
+
+INSERT INTO sales_transaction VALUES
+(1,  '2025-01-01', 101, 'Male',   275, 'Electronics', 2, 500.00, 1000.00),
+(2,  '2025-01-02', 102, 'Female', 30, 'Grocery',     5,  50.00,  250.00),
+(3,  '2025-01-02', 103, 'Male',   40, 'Clothing',    3, 200.00,  600.00),
+(4,  '2025-01-03', 104, 'Female', 22, 'Furniture',   1, 800.00,  800.00),
+(5,  '2025-01-03', 105, 'Male',   35, 'Clothing',    4, 150.00,  600.00),
+(6,  '2025-01-04', 106, 'Female', 28, 'Electronics', 1, 700.00,  700.00),
+(7,  '2025-01-04', 107, 'Male',   42, 'Grocery',    10,  40.00,  400.00),
+(8,  '2025-01-05', 108, 'Female', 33, 'Furniture',   2,1200.00, 2400.00),
+(9,  '2025-01-05', 109, 'Male',   27, 'Beauty',      5, 100.00,  500.00),
+(10, '2025-01-06', 110, 'Female', 38, 'Electronics', 1, 900.00,  900.00),
+(11, '2025-01-07', 111, 'Male',   29, 'Furniture',   1,1500.00, 1500.00),
+(12, '2025-01-07', 112, 'Female', 24, 'Beauty',      3, 100.00,  300.00),
+(13, '2025-01-08', 113, 'Male',   31, 'Beauty',      2, 200.00,  400.00),
+(14, '2025-01-08', 114, 'Female', 41, 'Electronics', 2, 850.00, 1700.00),
+(15, '2025-01-09', 115, 'Male',   37, 'Grocery',     8,  60.00,  480.00),
+(16, '2025-01-09', 116, 'Female', 32, 'Clothing',    3, 250.00,  750.00),
+(17, '2025-01-10', 117, 'Male',   45, 'Electronics', 1,1000.00, 1000.00),
+(18, '2025-01-10', 118, 'Female', 29, 'Furniture',   1, 900.00,  900.00),
+(19, '2025-01-11', 119, 'Male',   34, 'Grocery',     5,  55.00,  275.00),
+(20, '2025-01-12', 120, 'Female', 26, 'Clothing',    2, 200.00,  400.00);
+
+CREATE DATABASE retail_dw;
+USE retail_dw;
+
+-- Customer Dimension
+CREATE TABLE dim_customer (
+    Customer_ID INT PRIMARY KEY,
+    Gender VARCHAR(10),
+    Age INT
+);
+
+-- Product Dimension (Auto-incrementing ID for tracking unique products)
+CREATE TABLE dim_product (
+    Product_ID INT AUTO_INCREMENT PRIMARY KEY,
+    Product_Category VARCHAR(50)
+);
+
+-- Time Dimension (To analyze trends by year, month, day)
+CREATE TABLE dim_time (
+    Date DATE PRIMARY KEY,
+    Year INT,
+    Month INT,
+    Day INT
+);
+
+
+CREATE TABLE fact_sales (
+    Transaction_ID INT PRIMARY KEY,
+    Date DATE,
+    Customer_ID INT,
+    Product_ID INT,
+    Quantity INT,
+    Total_Amount DECIMAL(10,2),
+    FOREIGN KEY (Customer_ID) REFERENCES dim_customer(Customer_ID),
+    FOREIGN KEY (Product_ID) REFERENCES dim_product(Product_ID),
+    FOREIGN KEY (Date) REFERENCES dim_time(Date)
+);
+
+CREATE TABLE staging_sales AS 
+SELECT * FROM retail_source.sales_transaction;
+
+DELETE s1 FROM staging_sales s1
+JOIN staging_sales s2 
+WHERE s1.Transaction_ID > s2.Transaction_ID 
+AND s1.Transaction_ID = s2.Transaction_ID;
+
+DELETE FROM staging_sales 
+WHERE Total_Amount IS NULL OR Quantity IS NULL;
+
+UPDATE staging_sales 
+SET Total_Amount = Quantity * Price_per_Unit 
+WHERE Total_Amount != Quantity * Price_per_Unit;
+
+-- Load Customers
+INSERT INTO dim_customer (Customer_ID, Gender, Age)
+SELECT DISTINCT Customer_ID, Gender, Age FROM staging_sales;
+
+-- Load Products
+INSERT INTO dim_product (Product_Category)
+SELECT DISTINCT Product_Category FROM staging_sales;
+
+-- Load Time
+INSERT INTO dim_time (Date, Year, Month, Day)
+SELECT DISTINCT Date, YEAR(Date), MONTH(Date), DAY(Date) FROM staging_sales;
+
+INSERT INTO fact_sales (Transaction_ID, Date, Customer_ID, Product_ID, Quantity, Total_Amount)
+SELECT 
+    s.Transaction_ID,
+    s.Date,
+    s.Customer_ID,
+    p.Product_ID,
+    s.Quantity,
+    s.Total_Amount
+FROM staging_sales s
+JOIN dim_product p ON s.Product_Category = p.Product_Category;
+
+
+
+
+SELECT p.Product_Category, SUM(f.Total_Amount) AS Total_Sales
+FROM fact_sales f
+JOIN dim_product p ON f.Product_ID = p.Product_ID
+GROUP BY p.Product_Category;
+
+SELECT c.Gender, AVG(f.Total_Amount) AS Avg_Spending
+FROM fact_sales f
+JOIN dim_customer c ON f.Customer_ID = c.Customer_ID
+GROUP BY c.Gender;
+
+
+SELECT t.Month, SUM(f.Total_Amount) AS Monthly_Sales
+FROM fact_sales f
+JOIN dim_time t ON f.Date = t.Date
+GROUP BY t.Month
+ORDER BY t.Month;
+
+
+
+

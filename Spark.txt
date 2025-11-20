@@ -1,0 +1,52 @@
+spark-shell --master yarn --deploy-mode client
+
+
+val stocksDF = spark.read.option("header","true").option("inferSchema","true").csv("file:///home/navamohan/stock_prices.csv")
+
+stocksDF.show(10)
+stocksDF.printSchema()
+
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.expressions.Window
+
+
+val windowSpec = Window.partitionBy("Stock").orderBy("Date").rowsBetween(-2, 0)
+val movingAvgDF = stocksDF.withColumn(
+  "MA_3",
+  round(avg("Close").over(windowSpec), 2)
+)
+
+
+movingAvgDF.show()
+
+
+load everytime
+
+val resultDF = movingAvgDF.select("Date", "Stock", "Close", "MA_3").orderBy("Stock", "Date")
+resultDF.show()
+
+
+df.show(10)
+
+df.filter($"Stock" === "AAPL").show()
+df.orderBy($"Close".desc).show(5)
+df.count()
+
+
+val tslaDF = df.filter($"Stock" === "TSLA")
+
+tslaDF.write.option("header","true").csv("hdfs:///user/navamohan/stocks/tsla_output")
+
+check out of terminal
+
+hdfs dfs -ls /user/navamohan/stocks/tsla_output
+
+
+df.select("Date", "Close").show()
+
+
+df.select("Stock").distinct().show()
+
+df.filter($"Close" > 200).show()
+
